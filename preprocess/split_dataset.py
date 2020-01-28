@@ -1,8 +1,9 @@
-import json
 import csv
 import configparser
 import sys
+import random
 import os
+import json
 
 module_path = os.path.abspath('.')
 sys.path.insert(0, module_path)
@@ -10,14 +11,12 @@ sys.path.append("../../")
 
 
 def split_opendialkg():
-    import random
-    import os
-    import json
-
+    """
+    Read the dialogue part of the raw dataset, then randomly split the dialogues into [0.7 : 0.15 : 0.15]
+    """
     cfg = configparser.ConfigParser()
-    cfg.read("./preprocess/path.cfg")
+    cfg.read("./preprocess/dataset.cfg")
     path = cfg['PATH']
-
     dials = []
     with open(path['DIALOGUE']) as csv_file:
         csv_reader = csv.reader(csv_file, delimiter=',')
