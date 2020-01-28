@@ -1,3 +1,4 @@
 opendialkg/
 save/
 *.pyc
+.idea/

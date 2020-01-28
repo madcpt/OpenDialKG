@@ -133,7 +133,7 @@ if __name__ == '__main__':
 
     best_loss = 10000
     patient = 5
-    for epoch in range(20):
+    for epoch in range(200):
         if patient <= 0:
             print('ran out of patient')
             break
