@@ -9,7 +9,7 @@ module_path = os.path.abspath('.')
 sys.path.insert(0, module_path)
 sys.path.append("../../")
 
-from preprocess.create_data import load_kg
+from preprocess.data_reader import load_kg
 
 import torch
 from torch import nn
@@ -35,7 +35,9 @@ class KGData(Dataset):
     # noinspection PyShadowingNames
     def __init__(self, triple_list, entity_map, relation_map):
         self.triple_list = triple_list
-        self.triple_ind_list = [(entity_map[t.split('\t')[0]], relation_map[t.split('\t')[1]], entity_map[t.split('\t')[2]]) for t in triple_list]
+        self.triple_ind_list = [
+            (entity_map[t.split('\t')[0]], relation_map[t.split('\t')[1]], entity_map[t.split('\t')[2]]) for t in
+            triple_list]
 
     def __len__(self):
         return len(self.triple_list)
@@ -45,10 +47,41 @@ class KGData(Dataset):
         return {'triple': self.triple_ind_list[item]}
 
 
+def get_kg_connection_map(entity_map, relation_map, triple_list):
+    connection_map = {entity_id: {} for entity_id, _ in enumerate(entity_map)}
+    for triple in triple_list:
+        s_r_t = triple.split('\t')
+        si = entity_map[s_r_t[0]]
+        ri = relation_map[s_r_t[1]]
+        ti = entity_map[s_r_t[2]]
+        connection_map[si][ri] = ti
+    return connection_map
+
+
+def get_two_hops_map(connection_map):
+    two_hops_map = {entity_id: [] for entity_id in connection_map}
+    for start in connection_map:
+        for r1, t1 in connection_map[start].items():
+            two_hops_map[start].append((r1, t1))
+            for r2, t2 in connection_map[t1].items():
+                two_hops_map[start].append((r1, t1, r2, t2))
+    return two_hops_map
+
+
 if __name__ == '__main__':
     entity_map, relation_map, triple_list = load_kg()
     WholeDataLoader = get_kg_DataLoader(entity_map, relation_map, triple_list)
+    connection_map = get_kg_connection_map(entity_map, relation_map, triple_list)
+    two_hops_map = get_two_hops_map(connection_map)
 
-    for data in WholeDataLoader:
-        print(data)
-        exit()
+    # for k, v in two_hops_map.items():
+    #     print(k, v)
+    #     break
+
+    # for k in connection_map:
+    #     print(k, connection_map[k])
+    #     break
+    #
+    # for data in WholeDataLoader:
+    #     print(data)
+    #     break
