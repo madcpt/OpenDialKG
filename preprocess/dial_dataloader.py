@@ -11,7 +11,7 @@ module_path = os.path.abspath('.')
 sys.path.insert(0, module_path)
 sys.path.append("../../")
 
-from preprocess.data_reader import load_kg, parse_path_cfg
+from preprocess.data_reader import load_kg, parse_path_cfg, get_dial_vocab
 from preprocess.kg_dataloader import get_kg_DataLoader, get_kg_connection_map, get_two_hops_map
 
 import torch
@@ -19,11 +19,7 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
 
 
-def get_dial_vocab():
-    return
-
-
-def dial_reader(data_type, entity_map, relation_map, triple_list, dial_window_size=0):
+def dial_reader(data_type, entity_map, relation_map, triple_list, word2index, dial_window_size=0):
     assert data_type in ['train', 'dev', 'test']
     path = parse_path_cfg()
     file_path = path['%s_FILE' % data_type.upper()]
@@ -46,8 +42,9 @@ def dial_reader(data_type, entity_map, relation_map, triple_list, dial_window_si
                               kg_path]
                 sample = {'dial-id': dial_id,
                           'sample-id': len(dataset),
-                          'starting-entities': list(starting_entities),
-                          'previous_sentence': previous_sentence,
+                          'starting-entities': [entity_map[e] for e in starting_entities],
+                          'previous-sentence-utter': previous_sentence,
+                          'previous-sentence': [word2index[word] for word in word_tokenize(previous_sentence)],
                           'dialogue-history': dialogue_history[-dial_window_size:],
                           'kg-path-id': kg_path_id}
                 if ti != 0:  # there are few samples where assistant chooses path from scratch, I discarded these turns.
@@ -65,7 +62,7 @@ def dial_reader(data_type, entity_map, relation_map, triple_list, dial_window_si
                 pass
             else:
                 if len(previous_sentence) != 0:
-                    dialogue_history = dialogue_history + [previous_sentence]
+                    dialogue_history.append([word2index[word] for word in word_tokenize(previous_sentence)])
                 # print(turn)
                 previous_sentence = turn['message']
             # if 'metadata' in turn and 'action_id' in turn and turn['action_id'] != 'kgwalk/choose_path':
@@ -104,10 +101,10 @@ class DialDataLoader:
         del self.indexes
 
 
-def get_dial_DataLoader(entity_map, relation_map, triple_list, batch_size):
-    train_dataset = dial_reader('train', entity_map, relation_map, triple_list)
-    dev_dataset = dial_reader('dev', entity_map, relation_map, triple_list)
-    test_dataset = dial_reader('test', entity_map, relation_map, triple_list)
+def get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, batch_size):
+    train_dataset = dial_reader('train', entity_map, relation_map, triple_list, word2index)
+    dev_dataset = dial_reader('dev', entity_map, relation_map, triple_list, word2index)
+    test_dataset = dial_reader('test', entity_map, relation_map, triple_list, word2index)
     train = DialDataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     dev = DialDataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
     test = DialDataLoader(test_dataset, batch_size=batch_size, shuffle=False)
@@ -116,17 +113,18 @@ def get_dial_DataLoader(entity_map, relation_map, triple_list, batch_size):
 
 if __name__ == '__main__':
     entity_map, relation_map, triple_list = load_kg()
+    word2index = get_dial_vocab()
     # WholeDataLoader = get_kg_DataLoader(entity_map, relation_map, triple_list)
     # connection_map = get_kg_connection_map(entity_map, relation_map, triple_list)
     # two_hops_map = get_two_hops_map(connection_map)
 
-    train, dev, test = get_dial_DataLoader(entity_map, relation_map, triple_list, 16)
+    train, dev, test = get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, 16)
 
     print(len(dev))
 
     cnt = 0
     for di, data in enumerate(dev):
-        cnt += len(data)
-        # print(data)
-        # break
-    print(cnt)
+        # cnt += len(data)
+        print(data)
+        break
+    # print(cnt)

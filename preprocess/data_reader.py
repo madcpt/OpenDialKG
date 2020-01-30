@@ -4,6 +4,7 @@ import configparser
 import sys
 import os
 from tqdm import tqdm
+from nltk.tokenize import word_tokenize
 
 module_path = os.path.abspath('.')
 sys.path.insert(-1, module_path)
@@ -82,8 +83,41 @@ def load_dials(dial_type, entity_map, relation_map, triple_list):
     return
 
 
+def get_dial_vocab():
+    word2index = {'UNK': 0, 'PAD': 1, 'EOS': 2}
+    path = parse_path_cfg()
+    if os.path.exists(path['DIAL_VOCAB']):
+        with open(path['DIAL_VOCAB'], 'r', encoding='utf-8') as f:
+            word2index = json.load(f)
+    else:
+        for dial_type in ['train', 'dev', 'test']:
+            dial_file_path = path['%s_FILE' % dial_type.upper()]
+            with open(dial_file_path, 'r') as f:
+                dataset = json.load(f)
+                for sample in tqdm(dataset, total=len(dataset), disable=True):
+                    dial = sample['dialogue']
+                    for turn in dial:
+                        if 'action_id' in turn and turn['action_id'] == 'kgwalk/choose_path':
+                            utter = turn['metadata']['path'][2]
+                        elif 'action_id' in turn and turn['action_id'] == 'meta_thread/send_meta_message':
+                            utter = ''
+                        else:
+                            utter = turn['message']
+                        tokens = word_tokenize(utter)
+                        # print(tokens)
+                        for word in tokens:
+                            if word not in word2index:
+                                word2index[word] = len(word2index)
+        with open(path['DIAL_VOCAB'], 'w', encoding='utf-8') as f:
+            json.dump(word2index, f)
+    print('Vocab Size: ', len(word2index))
+    return word2index
+
+
 if __name__ == '__main__':
     entity_map, relation_map, triple_list = load_kg()
     load_dials('train', entity_map, relation_map, triple_list)
     load_dials('dev', entity_map, relation_map, triple_list)
     load_dials('test', entity_map, relation_map, triple_list)
+
+    get_dial_vocab()

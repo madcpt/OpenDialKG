@@ -8,7 +8,7 @@ module_path = os.path.abspath('.')
 sys.path.insert(0, module_path)
 sys.path.append("../../")
 
-from preprocess.create_data import load_kg
+from preprocess.data_reader import load_kg
 from preprocess.kg_dataloader import get_kg_DataLoader
 
 import torch
@@ -108,7 +108,7 @@ class TransE(nn.Module):
             cnt += data['triple'][0].size(0)
             loss += batch_loss
             pbar.set_description('l: %.4f' % (loss / cnt))
-        return loss/cnt
+        return loss / cnt
 
     def save_model(self):
         print("Saving to %s" % self.save_path)

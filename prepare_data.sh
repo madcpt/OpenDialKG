@@ -5,7 +5,7 @@ if [ ! -d "$DIRECTORY" ]; then
 fi
 
 python3 preprocess/split_dataset.py
-python3 preprocess/create_data.py
+python3 preprocess/data_reader.py
 
 #mkdir save
 #mkdir save/KG
