@@ -19,7 +19,15 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader, random_split
 
 
-def dial_reader(data_type, entity_map, relation_map, triple_list, word2index, dial_window_size=0):
+def get_kg_path_search_space(starting_entities, entity_map, two_hop_map):
+    all_paths = []
+    for s in starting_entities:
+        si = entity_map[s]
+        all_paths.extend(two_hop_map[si])
+    return all_paths
+
+
+def dial_reader(data_type, entity_map, relation_map, triple_list, word2index, two_hop_map, dial_window_size=0):
     assert data_type in ['train', 'dev', 'test']
     path = parse_path_cfg()
     file_path = path['%s_FILE' % data_type.upper()]
@@ -40,13 +48,16 @@ def dial_reader(data_type, entity_map, relation_map, triple_list, word2index, di
                 kg_path = turn['metadata']['path'][1]
                 kg_path_id = [(entity_map[triple[0]], relation_map[triple[1]], entity_map[triple[2]]) for triple in
                               kg_path]
+                if len(starting_entities) == 0:
+                    starting_entities.add(kg_path[0][0])
                 sample = {'dial-id': dial_id,
                           'sample-id': len(dataset),
                           'starting-entities': [entity_map[e] for e in starting_entities],
                           'previous-sentence-utter': previous_sentence,
-                          'previous-sentence': [word2index[word] for word in word_tokenize(previous_sentence)],
+                          'previous-sentence': [word2index[word.lower()] for word in word_tokenize(previous_sentence)],
                           'dialogue-history': dialogue_history[-dial_window_size:],
-                          'kg-path-id': kg_path_id}
+                          'kg-path-id': kg_path_id,
+                          'kg-path-search-space': get_kg_path_search_space(starting_entities, entity_map, two_hop_map)}
                 if ti != 0:  # there are few samples where assistant chooses path from scratch, I discarded these turns.
                     dataset.append(sample)
                 for triple in kg_path:
@@ -62,8 +73,7 @@ def dial_reader(data_type, entity_map, relation_map, triple_list, word2index, di
                 pass
             else:
                 if len(previous_sentence) != 0:
-                    dialogue_history.append([word2index[word] for word in word_tokenize(previous_sentence)])
-                # print(turn)
+                    dialogue_history.append([word2index[word.lower()] for word in word_tokenize(previous_sentence)])
                 previous_sentence = turn['message']
             # if 'metadata' in turn and 'action_id' in turn and turn['action_id'] != 'kgwalk/choose_path':
             #     print(json.dumps(dialogue,  sort_keys=True, indent=4, separators=(',', ': ')))
@@ -101,10 +111,10 @@ class DialDataLoader:
         del self.indexes
 
 
-def get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, batch_size):
-    train_dataset = dial_reader('train', entity_map, relation_map, triple_list, word2index)
-    dev_dataset = dial_reader('dev', entity_map, relation_map, triple_list, word2index)
-    test_dataset = dial_reader('test', entity_map, relation_map, triple_list, word2index)
+def get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, two_hops_map, batch_size):
+    train_dataset = dial_reader('train', entity_map, relation_map, triple_list, word2index, two_hops_map)
+    dev_dataset = dial_reader('dev', entity_map, relation_map, triple_list, word2index, two_hops_map)
+    test_dataset = dial_reader('test', entity_map, relation_map, triple_list, word2index, two_hops_map)
     train = DialDataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     dev = DialDataLoader(dev_dataset, batch_size=batch_size, shuffle=False)
     test = DialDataLoader(test_dataset, batch_size=batch_size, shuffle=False)
@@ -115,10 +125,10 @@ if __name__ == '__main__':
     entity_map, relation_map, triple_list = load_kg()
     word2index = get_dial_vocab()
     # WholeDataLoader = get_kg_DataLoader(entity_map, relation_map, triple_list)
-    # connection_map = get_kg_connection_map(entity_map, relation_map, triple_list)
-    # two_hops_map = get_two_hops_map(connection_map)
+    connection_map = get_kg_connection_map(entity_map, relation_map, triple_list)
+    two_hops_map = get_two_hops_map(connection_map)
 
-    train, dev, test = get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, 16)
+    train, dev, test = get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, two_hops_map, 16)
 
     print(len(dev))
 

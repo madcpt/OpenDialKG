@@ -87,6 +87,7 @@ def get_dial_vocab():
     word2index = {'UNK': 0, 'PAD': 1, 'EOS': 2}
     path = parse_path_cfg()
     if os.path.exists(path['DIAL_VOCAB']):
+        print('Loading from ', path['DIAL_VOCAB'])
         with open(path['DIAL_VOCAB'], 'r', encoding='utf-8') as f:
             word2index = json.load(f)
     else:
@@ -105,7 +106,8 @@ def get_dial_vocab():
                             utter = turn['message']
                         tokens = word_tokenize(utter)
                         # print(tokens)
-                        for word in tokens:
+                        for word_ in tokens:
+                            word = word_.lower()
                             if word not in word2index:
                                 word2index[word] = len(word2index)
         with open(path['DIAL_VOCAB'], 'w', encoding='utf-8') as f:

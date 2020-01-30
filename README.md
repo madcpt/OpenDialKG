@@ -14,10 +14,11 @@ bash ./make_data.sh
 
 ### KG Embedding Pre-training
 ```
-To Be Done
+bash ./train_KGE.sh
 ```
+By defaults, KG Embeddings are stored in `./save/KGE/transe/`.
 
-### OpenDialKG training
+###  KG Walker training
 
 ```
 To Be Done
@@ -37,4 +38,4 @@ year = {2019},
 ```
 
 ## License
-OpenDialKG is released under [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode), see [LICENSE](LICENSE) for details.
+OpenDialKG dataset is released under [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode), see [LICENSE](LICENSE) for details.
