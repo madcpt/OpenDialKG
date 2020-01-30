@@ -16,7 +16,7 @@ bash ./make_data.sh
 ```
 bash ./train_KGE.sh
 ```
-By defaults, KG Embeddings are stored in `./save/KGE/transe/`.
+By default, KG Embeddings are stored in `./save/KGE/transe/`.
 
 ###  KG Walker training
 

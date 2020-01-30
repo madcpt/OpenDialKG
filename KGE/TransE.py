@@ -26,7 +26,7 @@ parser.add_argument('-cuda', '--use_cuda', help='Use cuda', type=int, required=F
 
 args = vars(parser.parse_args())
 
-device = torch.device('cuda' if args['use_cuda'] else 'cpu')
+device = torch.device('cuda' if args['use_cuda'] and torch.cuda.is_available() else 'cpu')
 
 
 class TransE(nn.Module):

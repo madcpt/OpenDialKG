@@ -5,10 +5,26 @@ import sys
 import os
 from tqdm import tqdm
 from nltk.tokenize import word_tokenize
+from embeddings import GloveEmbedding
 
 module_path = os.path.abspath('.')
 sys.path.insert(-1, module_path)
 sys.path.append("../../")
+
+
+def dump_pretrained_emb(word2index, dump_path):
+    print("Dumping pretrained embeddings into ", dump_path)
+    index2word = {v: k for k, v in word2index.items()}
+    embeddings = [GloveEmbedding()]
+    E = []
+    for i in tqdm(range(len(word2index.keys()))):
+        w = index2word[i]
+        e = []
+        for emb in embeddings:
+            e += emb.emb(w, default='zero')
+        E.append(e)
+    with open(dump_path, 'wt') as f:
+        json.dump(E, f)
 
 
 def parse_path_cfg():
@@ -113,6 +129,9 @@ def get_dial_vocab():
         with open(path['DIAL_VOCAB'], 'w', encoding='utf-8') as f:
             json.dump(word2index, f)
     print('Vocab Size: ', len(word2index))
+    dump_path = path['DIAL_EMBEDDING'].replace('NUM', str(len(word2index)))
+    if not os.path.exists(dump_path):
+        dump_pretrained_emb(word2index, dump_path)
     return word2index
 
 
