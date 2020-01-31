@@ -15,7 +15,7 @@ sys.path.append("../../")
 
 from preprocess.data_reader import load_kg, parse_path_cfg, get_dial_vocab
 from preprocess.kg_dataloader import get_kg_DataLoader, get_kg_connection_map, get_two_hops_map
-from preprocess.dial_dataloader import get_dial_DataLoader
+from preprocess.dial_dataloader import get_dial_DataLoader, get_kg_path_search_space
 from KGE.TransE import TransE
 
 import torch
@@ -52,6 +52,40 @@ class Encoder(nn.Module):
         return outputs, en_hidden
 
 
+class Attn(nn.Module):
+    def __init__(self, q_hidden_size, k_hidden_size, mode='general'):
+        super(Attn, self).__init__()
+        self.modes = ['dot', 'general', 'concat']
+        assert mode in self.modes
+        self.mode = mode
+
+        if mode is 'general':
+            self.att = nn.Linear(q_hidden_size, k_hidden_size)
+
+    def _dot_socre(self, encoder_outputs, hidden):
+        score = torch.sum(hidden * encoder_outputs, dim=2)
+        return score
+
+    def _general_score(self, encoder_outputs, hidden):
+        # (batch, len, dim) -> (batch, len, k_hidden_size)
+        energy = self.att(encoder_outputs)
+        # (batch, k_hidden) -> (batch, len, k_hidden)
+        hidden = torch.repeat_interleave(hidden.unsqueeze(1), encoder_outputs.size(1), dim=1)
+        score = torch.sum(hidden * energy, dim=2)
+        return score
+
+    def forward(self, encoder_outputs, hidden):
+        # encoder_outputs: (batch, len, q_hidden_size)
+        # hidden: (batch, k_hidden)
+        att_score = None
+        if self.mode is 'dot':
+            att_score = self._dot_socre(encoder_outputs, hidden)
+        elif self.mode is 'general':
+            att_score = self._general_score(encoder_outputs, hidden)
+        # return th.softmax(att_score, dim=1).unsqueeze(1)
+        return att_score
+
+
 class OpenDialKGWalker(nn.Module):
     def __init__(self, init_kg):
         super().__init__()
@@ -76,15 +110,14 @@ class OpenDialKGWalker(nn.Module):
 
         self.input_modality_attend = nn.Linear(2 * self.rnn_hidden_size, 2)
 
-    def forward(self, batch_data):
+    def encode(self, batch_data):
+        # Input Encoding
         batch_size = len(batch_data)
-        # Input Encoder
         # TODO 3-way modality
         batch_utter = []
         batch_starting_entities_embeddings = []
         for si, sample in enumerate(batch_data):
-            # ['dial-id', 'sample-id', 'starting-entities', 'previous-sentence-utter', 'previous-sentence', 'dialogue-history', 'kg-path-id', 'kg-path-search-space']
-            batch_utter.append(sample['previous-sentence'])
+            batch_utter.append([0] + sample['previous-sentence'])
             starting_entities = torch.tensor(sample['starting-entities']).to(device)
             entities_embeddings = self.KGEmbeddingModel.get_embedding(starting_entities, 'entity')
             entities_embeddings_aggregate = torch.sum(entities_embeddings, dim=0)
@@ -96,11 +129,38 @@ class OpenDialKGWalker(nn.Module):
         batch_utter_tensor = torch.tensor(batch_utter).to(device)
         batch_utter_embedding = self.word_embedding(batch_utter_tensor)
         out, hid = self.utter_encoder.forward(batch_utter_embedding, input_lens)  # out: [b, len, 256], hid: [2, b, 128]
-        input_aggregate = torch.cat([batch_starting_entities_embeddings.unsqueeze(dim=1), hid[-1].unsqueeze(dim=1)], dim=1)  # [b, 2, 128]
+        input_aggregate = torch.cat([batch_starting_entities_embeddings.unsqueeze(dim=1), hid[-1].unsqueeze(dim=1)],
+                                    dim=1)  # [b, 2, 128]
         input_flatten = input_aggregate.reshape(batch_size, -1)
         input_modality_attention_logic = torch.sigmoid(self.input_modality_attend(input_flatten))  # [b, 2]
         input_modality_attention_score = input_modality_attention_logic.softmax(dim=1)
-        context_vector = (input_modality_attention_score.unsqueeze(dim=-1) * input_aggregate).sum(dim=1)  # [b, 128]
+        context_vector = (input_modality_attention_score.unsqueeze(dim=-1) * input_aggregate).sum(
+            dim=1)  # x_bar: [b, 128]
+        return batch_starting_entities_embeddings, context_vector
+
+    def decode(self, batch_data, starting_entities, context_vector):
+        # Graph Decoding
+        for si, sample in enumerate(batch_data):
+            # for s in sample['kg-path']:
+            #     triple = '\t'.join(s)
+            #     if triple not in triple_list:
+            #         print('s:', triple, triple in triple_list)
+            label_rel = []
+            label_entity = [sample['kg-path-id'][0][0]]
+            for s in sample['kg-path-id']:
+                label_rel += [s[1]]
+                label_entity += [s[2]]
+            search_space = get_kg_path_search_space(starting_entities.tolist(), connection_map)
+            search_space_e = [e for i, e in enumerate(p) for p in search_space if i % 2 == 0]
+            # if tuple(a) not in search_space:
+            #     print(a)
+            #     exit()
+        return
+
+    def forward(self, batch_data):
+        # ['dial-id', 'sample-id', 'starting-entities', 'previous-sentence-utter', 'previous-sentence', 'dialogue-history', 'kg-path-id', 'kg-path-search-space']
+        starting_entities_embedded, context = self.encode(batch_data)
+        self.decode(batch_data, starting_entities_embedded, context)
         return
 
 
@@ -109,17 +169,19 @@ if __name__ == '__main__':
     word2index = get_dial_vocab()
     # WholeDataLoader = get_kg_DataLoader(entity_map, relation_map, triple_list)
     connection_map = get_kg_connection_map(entity_map, relation_map, triple_list)
-    two_hops_map = get_two_hops_map(connection_map)
+    # two_hops_map = get_two_hops_map(connection_map)
 
-    model = OpenDialKGWalker(False)
-    with open(temp_test_file, 'rb') as f:
-        data = pickle.load(f)
-    model(data)
+    model = OpenDialKGWalker(False).to(device)
+
+    train, dev, test = get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, connection_map, 16, load_train=True)
+    for di, data in tqdm(enumerate(train), total=len(train)):
+        model(data)
+        # print(len(data))
+        # with open(temp_test_file, 'wb') as f:
+        #     pickle.dump(data, f)
+        # break
+
+    # with open(temp_test_file, 'rb') as f:
+    #     data = pickle.load(f)
+    # model(data)
     # print(data)
-
-    # train, dev, test = get_dial_DataLoader(entity_map, relation_map, triple_list, word2index, two_hops_map, 16)
-    # for di, data in enumerate(train):
-    #     # print(len(data))
-    #     with open(temp_test_file, 'wb') as f:
-    #         pickle.dump(data, f)
-    #     break

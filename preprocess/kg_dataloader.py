@@ -54,25 +54,43 @@ def get_kg_connection_map(entity_map, relation_map, triple_list):
         si = entity_map[s_r_t[0]]
         ri = relation_map[s_r_t[1]]
         ti = entity_map[s_r_t[2]]
-        connection_map[si][ri] = ti
+        if ri not in connection_map[si]:
+            connection_map[si][ri] = [ti]
+        else:
+            connection_map[si][ri].append(ti)
     return connection_map
 
 
 def get_two_hops_map(connection_map):
+    raise DeprecationWarning('Please use get-two-hops_connection function!')
     two_hops_map = {entity_id: [] for entity_id in connection_map}
     for start in connection_map:
-        for r1, t1 in connection_map[start].items():
-            two_hops_map[start].append((r1, t1))
-            for r2, t2 in connection_map[t1].items():
-                two_hops_map[start].append((r1, t1, r2, t2))
+        for r1, t1s in connection_map[start].items():
+            for t1 in t1s:
+                two_hops_map[start].append((r1, t1))
+                for r2, t2s in connection_map[t1].items():
+                    for t2 in t2s:
+                        two_hops_map[start].append((r1, t1, r2, t2))
     return two_hops_map
+
+
+def get_two_hop_paths(start, connection_map):
+    two_hop_paths = []
+    for r1, t1s in connection_map[start].items():
+        for t1 in t1s:
+            two_hop_paths.append((start, r1, t1))
+            for r2, t2s in connection_map[t1].items():
+                for t2 in t2s:
+                    two_hop_paths.append((start, r1, t1, r2, t2))
+    return two_hop_paths
 
 
 if __name__ == '__main__':
     entity_map, relation_map, triple_list = load_kg()
     WholeDataLoader = get_kg_DataLoader(entity_map, relation_map, triple_list)
     connection_map = get_kg_connection_map(entity_map, relation_map, triple_list)
-    two_hops_map = get_two_hops_map(connection_map)
+    # two_hops_map = get_two_hops_map(connection_map)
+    two_hop_paths_demo = get_two_hop_paths(0, connection_map)
 
     # for k, v in two_hops_map.items():
     #     print(k, v)
