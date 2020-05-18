@@ -38,4 +38,4 @@ year = {2019},
 ```
 
 ## License
-OpenDialKG dataset is released under [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode), see [LICENSE](LICENSE) for details.
+OpenDialKG dataset is released under [CC-BY-NC-4.0](https://creativecommons.org/licenses/by-nc/4.0/legalcode), and the codes in this repo is released under [GPL](https://www.gnu.org/licenses/gpl-3.0.en.html), see [LICENSE](LICENSE) for details.
